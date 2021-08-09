@@ -70,7 +70,9 @@ def AffineCouplingSplit(scale, translate):
         scale_params, scale_apply_fun = scale(scale_rng, cutoff, input_dim - cutoff)
 
         translate_rng, rng = random.split(rng)
-        translate_params, translate_apply_fun = translate(translate_rng, cutoff, input_dim - cutoff)
+        translate_params, translate_apply_fun = translate(
+            translate_rng, cutoff, input_dim - cutoff
+        )
 
         def direct_fun(params, inputs, **kwargs):
             scale_params, translate_params = params
@@ -186,7 +188,9 @@ def BatchNorm(momentum=0.9):
             x_hat = (inputs - mean) / np.sqrt(var)
 
             outputs = x_hat * np.exp(log_weight) + bias
-            log_det_jacobian = np.full((inputs.shape[0],), (log_weight - 0.5 * np.log(var)).sum())
+            log_det_jacobian = np.full(
+                (inputs.shape[0],), (log_weight - 0.5 * np.log(var)).sum()
+            )
             return outputs, log_det_jacobian
 
         def inverse_fun(params, inputs, **kwargs):
@@ -208,7 +212,9 @@ def BatchNorm(momentum=0.9):
             x_hat = (inputs - bias) * np.exp(-log_weight)
 
             outputs = x_hat * np.sqrt(var) + mean
-            log_det_jacobian = np.full((inputs.shape[0],), (-log_weight + 0.5 * np.log(var)).sum())
+            log_det_jacobian = np.full(
+                (inputs.shape[0],), (-log_weight + 0.5 * np.log(var)).sum()
+            )
             return outputs, log_det_jacobian
 
         return (log_weight, bias), direct_fun, inverse_fun
@@ -398,7 +404,9 @@ def Sigmoid(clip_before_logit=True):
     def init_fun(rng, input_dim, **kwargs):
         def direct_fun(params, inputs, **kwargs):
             outputs = spys.expit(inputs)
-            log_det_jacobian = np.log(spys.expit(inputs) * (1 - spys.expit(inputs))).sum(-1)
+            log_det_jacobian = np.log(
+                spys.expit(inputs) * (1 - spys.expit(inputs))
+            ).sum(-1)
             return outputs, log_det_jacobian
 
         def inverse_fun(params, inputs, **kwargs):
@@ -434,13 +442,19 @@ def Serial(*init_funs):
         True
     """
 
-    def init_fun(rng, input_dim, **kwargs):
+    def init_fun(rng, input_dim, context_dim=0, hidden_dim=64, **kwargs):
         init_inputs = kwargs.pop("init_inputs", None)
 
         all_params, direct_funs, inverse_funs = [], [], []
         for init_fun in init_funs:
             rng, layer_rng = random.split(rng)
-            param, direct_fun, inverse_fun = init_fun(layer_rng, input_dim, init_inputs=init_inputs)
+            param, direct_fun, inverse_fun = init_fun(
+                layer_rng,
+                input_dim,
+                context_dim=context_dim,
+                hidden_dim=hidden_dim,
+                init_inputs=init_inputs,
+            )
 
             all_params.append(param)
             direct_funs.append(direct_fun)
@@ -449,18 +463,22 @@ def Serial(*init_funs):
             if not (init_inputs is None):
                 init_inputs = direct_fun(param, init_inputs)[0]
 
-        def feed_forward(params, apply_funs, inputs):
+        def feed_forward(params, apply_funs, inputs, context=None):
             log_det_jacobians = np.zeros(inputs.shape[:1])
             for apply_fun, param in zip(apply_funs, params):
-                inputs, log_det_jacobian = apply_fun(param, inputs, **kwargs)
+                inputs, log_det_jacobian = apply_fun(
+                    param, inputs, context=context, **kwargs
+                )
                 log_det_jacobians += log_det_jacobian
             return inputs, log_det_jacobians
 
-        def direct_fun(params, inputs, **kwargs):
-            return feed_forward(params, direct_funs, inputs)
+        def direct_fun(params, inputs, context=None, **kwargs):
+            return feed_forward(params, direct_funs, inputs, context=context)
 
-        def inverse_fun(params, inputs, **kwargs):
-            return feed_forward(reversed(params), reversed(inverse_funs), inputs)
+        def inverse_fun(params, inputs, context=None, **kwargs):
+            return feed_forward(
+                reversed(params), reversed(inverse_funs), inputs, context=context
+            )
 
         return all_params, direct_fun, inverse_fun
 

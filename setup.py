@@ -1,28 +1,33 @@
 from setuptools import setup, find_packages
 
 extras = {}
-extras['docs'] = ['recommonmark', 'sphinx', 'sphinx-markdown-tables', 'sphinx-rtd-theme']
-extras['testing'] = ['pytest', 'pytest-xdist']
-extras['quality'] = ['black', 'isort', 'flake8']
-extras['dev'] = extras['testing'] + extras['quality']
+extras["docs"] = [
+    "recommonmark",
+    "sphinx",
+    "sphinx-markdown-tables",
+    "sphinx-rtd-theme",
+]
+extras["testing"] = ["pytest", "pytest-xdist"]
+extras["quality"] = ["black", "isort", "flake8"]
+extras["dev"] = extras["testing"] + extras["quality"]
 
 setup(
-    name='jax-flows',
-    version='0.0.1',
-    author='Chris Waites',
-    author_email='cwaites10@gmail.com',
-    description='Normalizing Flows for JAX',
-    long_description=open('README.md').read(),
+    name="jaxflows",
+    version="0.0.1",
+    author="Chris Waites and John Tamanas",
+    author_email="jtamanas@gmail.com",
+    description="Normalizing Flows for JAX",
+    long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    license='MIT',
-    url='http://github.com/ChrisWaites/jax-flows',
+    license="MIT",
+    url="http://github.com/jtamanas/jax-flows",
     packages=find_packages(),
     install_requires=[
-        'jax',
-        'jaxlib',
-        'numpy',
-        'scipy',
-        'sklearn',
+        "jax",
+        "jaxlib",
+        "numpy",
+        "scipy",
+        "sklearn",
     ],
     extras_require=extras,
     classifiers=[
@@ -30,5 +35,5 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=3.6.0',
+    python_requires=">=3.6.0",
 )
