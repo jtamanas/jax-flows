@@ -85,6 +85,8 @@ def Flow(transformation, prior=Normal()):
             return log_probs + log_det
 
         def sample(rng, params, context=None, num_samples=1):
+            if context is not None:
+                num_samples = context.shape[0]
             prior_samples = prior_sample(rng, prior_params, num_samples)
             return inverse_fun(params, prior_samples, context=context)[0]
 
