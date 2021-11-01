@@ -1,9 +1,10 @@
+import jax
 import jax.numpy as np
 from jax import random
 from jax.scipy.special import logsumexp
 from jax.scipy.stats import norm, multivariate_normal
-from jax.experimental import stax
-
+import flax.linen as nn
+from .utils import Sequential
 
 def Normal():
     """
@@ -52,7 +53,7 @@ def GMM(means, covariances, weights):
 
 def MLPEmbedding(
     rng,
-    input_dim,
+    input_shape,
     embedding_dim=32,
     hidden_dim=128,
     num_layers=2,
@@ -63,13 +64,25 @@ def MLPEmbedding(
         use_context_embedding
     ), "Initializing embedding with use_context_embedding==False"
 
+    if type(input_shape) is int:
+        input_shape = (input_shape,)
     if act is None:
-        act = stax.Selu
+        act = "celu"
 
-    layers = [lyr for _ in range(num_layers) for lyr in (stax.Dense(hidden_dim), act)]
-    layers += [stax.Dense(embedding_dim)]
-    init_random_params, embed = stax.serial(*layers)
-    _, init_params = init_random_params(rng, (-1, input_dim))
+    layers = [lyr for _ in range(num_layers) for lyr in (nn.Dense(hidden_dim), getattr(nn, act),)]
+    layers += [nn.Dense(embedding_dim)]
+    
+    @jax.jit
+    def init_params_fn(key, x):
+        variables = Sequential(layers).init(key, x)
+        return variables['params']
+
+    @jax.jit
+    def embed(params, x):
+        return Sequential(layers).apply({"params": params}, x)
+    
+    dummy_input = np.ones((1, *input_shape))
+    init_params = init_params_fn(rng, dummy_input)
     return init_params, embed
 
 
