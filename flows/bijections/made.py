@@ -36,7 +36,7 @@ class MaskedDense(nn.Dense):
             "kernel", self.kernel_init, (self.mask.shape[0], self.features)
         )
         kernel = np.asarray(kernel, self.dtype)
-        kernel = kernel * self.mask
+        kernel = kernel * self.mask  # major difference from flax.linen.Dense
         y = jax.lax.dot_general(
             inputs,
             kernel,
