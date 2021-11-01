@@ -9,43 +9,14 @@ from typing import Any
 Array = Any
 
 
-# def MaskedDense(mask, use_context=False):
-#     def init_fun(rng, input_shape):
-#         out_dim = mask.shape[-1]
-#         output_shape = input_shape[:-1] + (out_dim,)
-#         k1, k2 = random.split(rng)
-#         bound = 1.0 / (input_shape[-1] ** 0.5)
-#         W = random.uniform(k1, (input_shape[-1], out_dim), minval=-bound, maxval=bound)
-#         b = random.uniform(k2, (out_dim,), minval=-bound, maxval=bound)
-#         return output_shape, (W, b)
-
-#     def apply_fun(params, inputs, context=None, **kwargs):
-#         W, b = params
-#         if context is not None and use_context:
-#             assert (
-#                 inputs.shape[0] == context.shape[0]
-#             ), "inputs and context must have the same batch size"
-#             inputs = np.hstack([inputs, context])
-#         return np.dot(inputs, W * mask) + b
-
-#     return init_fun, apply_fun
-
-
 class MaskedDense(nn.Dense):
     mask: Array = None
     use_context: bool = False
-    
-    # def setup(self):
-        # print(self.mask.shape)
-        # print(self.use_context)
-        # super().setup()
-        # self.mask = mask
-        # self.use_context = use_context
 
     @compact
     def __call__(self, inputs: Array, context=None) -> Array:
         """
-        Taken from flax.linen.Dense. 
+        Taken from flax.linen.Dense.
         Applies a masked linear transformation to the inputs along the last dimension.
 
         Args:
@@ -55,25 +26,25 @@ class MaskedDense(nn.Dense):
         The transformed input.
         """
         inputs = np.asarray(inputs, self.dtype)
-        # print('inputs', inputs.shape)
         if context is not None and self.use_context:
             assert (
                 inputs.shape[0] == context.shape[0]
             ), "inputs and context must have the same batch size"
             inputs = np.hstack([inputs, context])
-            
-        kernel = self.param('kernel',
-                            self.kernel_init,
-                            (self.mask.shape[0], self.features))
+
+        kernel = self.param(
+            "kernel", self.kernel_init, (self.mask.shape[0], self.features)
+        )
         kernel = np.asarray(kernel, self.dtype)
-        # print('kernel', kernel.shape)
         kernel = kernel * self.mask
-        y = jax.lax.dot_general(inputs, kernel,
-                            (((inputs.ndim - 1,), (0,)), ((), ())),
-                            precision=self.precision)
-        # print('y', y.shape)
+        y = jax.lax.dot_general(
+            inputs,
+            kernel,
+            (((inputs.ndim - 1,), (0,)), ((), ())),
+            precision=self.precision,
+        )
         if self.use_bias:
-            bias = self.param('bias', self.bias_init, (self.features,))
+            bias = self.param("bias", self.bias_init, (self.features,))
             bias = np.asarray(bias, self.dtype)
             y += np.reshape(bias, (1,) * (y.ndim - 1) + (-1,))
         return y
