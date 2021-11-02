@@ -3,6 +3,8 @@ import jax.scipy.special as spys
 from jax import random, scipy
 from jax.nn.initializers import orthogonal
 from jax.scipy import linalg
+import flax.linen as nn
+
 
 # Each layer constructor function returns an init_fun where...
 #
@@ -320,37 +322,48 @@ def Logit(clip_before_logit=True):
     return Invert(Sigmoid(clip_before_logit))
 
 
-def Reverse():
-    """An implementation of a reversing layer from `Density Estimation Using RealNVP`
-    (https://arxiv.org/abs/1605.08803).
+# def Reverse():
+#     """An implementation of a reversing layer from `Density Estimation Using RealNVP`
+#     (https://arxiv.org/abs/1605.08803).
 
-    Returns:
-        An ``init_fun`` mapping ``(rng, input_dim)`` to a ``(params, direct_fun, inverse_fun)`` triplet.
+#     Returns:
+#         An ``init_fun`` mapping ``(rng, input_dim)`` to a ``(params, direct_fun, inverse_fun)`` triplet.
 
-    Examples:
-        >>> num_examples, input_dim, tol = 20, 3, 1e-4
-        >>> layer_rng, input_rng = random.split(random.PRNGKey(0))
-        >>> inputs = random.uniform(input_rng, (num_examples, input_dim))
-        >>> init_fun = Reverse()
-        >>> params, direct_fun, inverse_fun = init_fun(layer_rng, input_dim)
-        >>> mapped_inputs = direct_fun(params, inputs)[0]
-        >>> reconstructed_inputs = inverse_fun(params, mapped_inputs)[0]
-        >>> np.allclose(inputs, reconstructed_inputs).item()
-        True
-    """
+#     Examples:
+#         >>> num_examples, input_dim, tol = 20, 3, 1e-4
+#         >>> layer_rng, input_rng = random.split(random.PRNGKey(0))
+#         >>> inputs = random.uniform(input_rng, (num_examples, input_dim))
+#         >>> init_fun = Reverse()
+#         >>> params, direct_fun, inverse_fun = init_fun(layer_rng, input_dim)
+#         >>> mapped_inputs = direct_fun(params, inputs)[0]
+#         >>> reconstructed_inputs = inverse_fun(params, mapped_inputs)[0]
+#         >>> np.allclose(inputs, reconstructed_inputs).item()
+#         True
+#     """
 
-    def init_fun(rng, input_dim, **kwargs):
-        perm = np.arange(input_dim)[::-1]
+#     def init_fun(rng, input_dim, **kwargs):
+#         perm = np.arange(input_dim)[::-1]
 
-        def direct_fun(params, inputs, **kwargs):
-            return inputs[:, perm], np.zeros(inputs.shape[:1])
+#         def direct_fun(params, inputs, **kwargs):
+#             return inputs[:, perm], np.zeros(inputs.shape[:1])
 
-        def inverse_fun(params, inputs, **kwargs):
-            return inputs[:, perm], np.zeros(inputs.shape[:1])
+#         def inverse_fun(params, inputs, **kwargs):
+#             return inputs[:, perm], np.zeros(inputs.shape[:1])
 
-        return (), direct_fun, inverse_fun
+#         return (), direct_fun, inverse_fun
 
-    return init_fun
+#     return init_fun
+
+class Reverse(nn.Module):
+    input_dim: int
+    
+    def __call__(self, inputs, *args, **kwargs):
+        perm = np.arange(self.input_dim)[::-1]
+        return inputs[:, perm], np.zeros(self.inputs.shape[:1])
+    
+    def inverse(self, inputs, *args, **kwargs):
+        perm = np.arange(self.input_dim)[::-1]
+        return inputs[:, perm], np.zeros(self.inputs.shape[:1])
 
 
 def Shuffle():
@@ -483,3 +496,38 @@ def Serial(*init_funs):
         return all_params, direct_fun, inverse_fun
 
     return init_fun
+
+
+from typing import Sequence
+import flax.linen as nn
+
+
+class SeriesTransform(nn.Module):
+    transformations: Sequence[nn.Module]
+    # inverse_transformation: Sequence[nn.Module]
+    # needs to have something like (params, log_pdf, sample)
+    # might be time to set up a classifier to get the formatting right
+
+    # params are stored in the model
+    # log_pdf is the forward call __call__
+
+    def __call__(self, inputs, *args, **kwargs):
+        log_det_jacobians = np.zeros(inputs.shape[:1])
+
+        for trans in self.transformations:
+            inputs, log_det_jacobian = trans.forward(inputs, *args, **kwargs)
+            log_det_jacobians += log_det_jacobian
+
+        return inputs, log_det_jacobians
+
+    def sample(self, inputs, *args, **kwargs):
+        log_det_jacobians = np.zeros(inputs.shape[:1])
+
+        for trans in reversed(self.transformations):
+            inputs, log_det_jacobian = trans.inverse(inputs, *args, **kwargs)
+            log_det_jacobians += log_det_jacobian
+
+        return inputs, log_det_jacobians
+
+    def log_pdf(self, inputs, *args, **kwargs):
+        return self(inputs, *args, **kwargs)

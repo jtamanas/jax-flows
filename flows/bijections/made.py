@@ -91,3 +91,39 @@ def MADE(transform):
         return params, direct_fun, inverse_fun
 
     return init_fun
+
+
+class MADE(nn.Module):
+    input_dim: int
+    hidden_dim: int = 64
+    context_dim: int = None
+    transform: Any = None
+
+    def setup(self):
+        super().setup()
+        params, apply_fun = self.transform(input_dim, context_dim, hidden_dim, **kwargs)
+        self.apply_fun = apply_fun
+        return params, apply_fun
+
+    def __call__(self, params, inputs, context=None):
+        log_weight, bias = apply_fun(params, inputs, context=context).split(2, axis=1)
+        outputs = (inputs - bias) * np.exp(-log_weight)
+        log_det_jacobian = -log_weight.sum(-1)
+        return outputs, log_det_jacobian
+
+    def forward(self, params, inputs, context=None):
+        return self(inputs, context=context)
+
+    def inverse(self, params, inputs, context=None):
+        outputs = np.zeros_like(inputs)
+        for i_col in range(inputs.shape[1]):
+            log_weight, bias = apply_fun(params, outputs, context=context).split(
+                2, axis=1
+            )
+            outputs = jax.ops.index_update(
+                outputs,
+                jax.ops.index[:, i_col],
+                inputs[:, i_col] * np.exp(log_weight[:, i_col]) + bias[:, i_col],
+            )
+        log_det_jacobian = -log_weight.sum(-1)
+        return outputs, log_det_jacobian
